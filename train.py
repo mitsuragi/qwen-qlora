@@ -4,6 +4,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments, Trainer, DataCollatorForLanguageModeling, training_args
 from peft import prepare_model_for_kbit_training, LoraConfig, get_peft_model 
 import os
+import argparse
 
 def print_trainable_parameters(model):
     trainable_params = 0 
@@ -16,6 +17,11 @@ def print_trainable_parameters(model):
     print(f'trainable params: {trainable_params} | all params: {all_param} | trainable% {100 * trainable_params / all_param}')
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-e', '--epochs', type=int, default=3, help='number of epochs')    
+    
+    args = parser.parse_args()
+
     load_dotenv()
 
     access_token = os.getenv('HF_TOKEN')
@@ -57,9 +63,9 @@ def main():
         per_device_train_batch_size=1,
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=8,
-        num_train_epochs=3,
+        num_train_epochs=args.epochs,
         learning_rate=2e-4,
-        logging_steps=1,
+        logging_steps=20,
         save_steps=100,
         eval_steps=50,
         save_total_limit=2,
@@ -77,6 +83,7 @@ def main():
     trainer.train()
 
     model.save_pretrained('output')
+
 
 if __name__ == '__main__':
     main()
