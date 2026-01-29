@@ -24,10 +24,17 @@ class PoetryDataset(Dataset):
 
         poem = row['poem'].strip()
 
-        if self.use_title and 'title' in row:
-            text = f'{row['title']}\n\n{poem}'
-        else:
-            text = poem
+        # if self.use_title and 'title' in row:
+        #     text = f'{row['title']}\n\n{poem}'
+        # else:
+        #     text = poem
+
+        text_instruction = (
+            f'Instruction:\nНапиши стихотворение в стиле Анны Ахматовой.\n\n'
+            f'Response:\n'
+        )
+
+        text = text_instruction + poem + tokenizer.eos_token
 
         encoding = self.tokenizer(
             text,
@@ -40,17 +47,24 @@ class PoetryDataset(Dataset):
 
         input_ids = encoding['input_ids'].squeeze(0)
         attention_mask = encoding['attention_mask'].squeeze(0)
+        labels = input_ids.clone()
+
+        instruction_len = len(
+            self.tokenizer(text_instruction, add_special_tokens=False)['input_ids']
+        )
+
+        labels[:instruction_len] = -100
 
         return {
             'input_ids': input_ids,
             'attention_mask': attention_mask,
-            'labels': input_ids.clone()
+            'labels': labels
         }
 
-def get_dataloaders(
+def get_datasets(
     input_dir,
     tokenizer,
-    batch_size=1,
+    # batch_size=1,
 ):
     train_dataset = PoetryDataset(
         os.path.join(input_dir, 'train.csv'),
@@ -61,26 +75,28 @@ def get_dataloaders(
         tokenizer=tokenizer
     )
 
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False
-    )
+    return train_dataset, val_dataset
 
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        collate_fn=data_collator
-    )
-
-    val_dataloader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=data_collator
-    )
-
-    return train_dataloader, val_dataloader
+    # data_collator = DataCollatorForLanguageModeling(
+    #     tokenizer=tokenizer,
+    #     mlm=False
+    # )
+    #
+    # train_dataloader = DataLoader(
+    #     train_dataset,
+    #     batch_size=batch_size,
+    #     shuffle=True,
+    #     collate_fn=data_collator
+    # )
+    #
+    # val_dataloader = DataLoader(
+    #     val_dataset,
+    #     batch_size=batch_size,
+    #     shuffle=False,
+    #     collate_fn=data_collator
+    # )
+    #
+    # return train_dataloader, val_dataloader
 
 
 if __name__ == '__main__':

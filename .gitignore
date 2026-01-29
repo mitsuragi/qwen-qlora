@@ -1,5 +1,9 @@
 .venv/
 dataset/
+output/
 __pycache__/
 *.pdf
+*.csv
 .env
+*.7z
+*.ipynb

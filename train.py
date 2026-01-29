@@ -1,4 +1,4 @@
-from dataset import get_dataloaders
+from dataset import get_datasets
 from dotenv import load_dotenv
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments, Trainer, DataCollatorForLanguageModeling, training_args
@@ -34,29 +34,30 @@ def main():
         bnb_4bit_compute_dtype=torch.bfloat16
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(   
         model_name,
         quantization_config=bnb_config,
         device_map='auto',
         token=access_token,
     )
+
     model.gradient_checkpointing_enable({"use_reentrant": False})
     model = prepare_model_for_kbit_training(model)
 
     config = LoraConfig(
         r=8,
         lora_alpha=32,
-        target_modules=['q_proj', 'v_proj', 'k_proj', 'o_proj'],
+        target_modules=['gate_proj', 'up_proj', 'down_proj', 'q_proj', 'v_proj', 'k_proj', 'o_proj'],
         lora_dropout=0.05,
         bias='none',
         task_type='CAUSAL_LM',
     )
 
     model = get_peft_model(model, config)
-    print_trainable_parameters(model)
+    model.print_trainable_parameters()
 
-    train_dl, val_dl = get_dataloaders('dataset', tokenizer)
+    train_ds, val_ds = get_datasets('dataset', tokenizer)
 
     training_args = TrainingArguments(
         output_dir='output',
@@ -64,25 +65,30 @@ def main():
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=8,
         num_train_epochs=args.epochs,
-        learning_rate=2e-4,
-        logging_steps=20,
+        learning_rate=3e-4,
         save_steps=100,
         eval_steps=50,
         save_total_limit=2,
         fp16=True,
+        save_strategy='epoch',
+        eval_strategy='epoch',
+        logging_strategy='epoch',
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_loss",
     )
 
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dl.dataset,
-        eval_dataset=val_dl.dataset,
+        train_dataset=train_ds,
+        eval_dataset=val_ds,
         data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False)
     )
 
     trainer.train()
 
-    model.save_pretrained('output')
+    trainer.model.save_pretrained('output')
+    # model.save_pretrained('output')
 
 
 if __name__ == '__main__':
